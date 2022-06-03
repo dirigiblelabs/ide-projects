@@ -43,6 +43,7 @@ projectsView.controller('ProjectsViewController', [
             model: '',
             parameters: {},
         };
+        $scope.cloneProjectData = {};
         $scope.imageFileExts = ['ico', 'bmp', 'png', 'jpg', 'jpeg', 'gif', 'svg'];
         $scope.modelFileExts = ['extension', 'extensionpoint', 'edm', 'model', 'dsm', 'schema', 'bpmn', 'job', 'listener', 'websocket', 'roles', 'constraints', 'table', 'view'];
 
@@ -273,16 +274,13 @@ projectsView.controller('ProjectsViewController', [
                         callbackTopic: "projects.tree.contextmenu",
                         items: [
                             {
-                                id: "pasteProject",
-                                label: "Paste",
-                                shortcut: "Ctrl+V",
-                                icon: "sap-icon--paste",
-                                isDisabled: !$scope.jstreeWidget.jstree(true).can_paste(),
+                                id: "publishAll",
+                                label: "Publish All",
+                                icon: "sap-icon--arrow-top",
                             },
                             {
                                 id: "unpublishAll",
                                 label: "Unpublish All",
-                                divider: true,
                                 icon: "sap-icon--arrow-bottom",
                             }
                         ]
@@ -378,7 +376,13 @@ projectsView.controller('ProjectsViewController', [
                             callbackTopic: 'projects.tree.contextmenu',
                             items: [
                                 newSubmenu,
-                                copyObj,
+                                {
+                                    id: "cloneProject",
+                                    label: "Clone",
+                                    divider: true,
+                                    icon: "sap-icon--duplicate",
+                                    data: node,
+                                },
                                 pasteObj,
                                 renameObj,
                                 deleteObj,
@@ -544,16 +548,22 @@ projectsView.controller('ProjectsViewController', [
         };
 
         $scope.publishAll = function () {
+            messageHub.showStatusBusy("Publishing projects...");
             publisherApi.publish(`/${$scope.selectedWorkspace.name}/*`).then(function (response) {
+                messageHub.hideStatusBusy();
                 if (response.status !== 201)
                     messageHub.setStatusError(`Unable to publish projects in '${$scope.selectedWorkspace.name}'`);
+                else messageHub.setStatusMessage(`Published all projects in '${$scope.selectedWorkspace.name}'`);
             });
         };
 
         $scope.unpublishAll = function () {
+            messageHub.showStatusBusy("Unpublishing projects...");
             publisherApi.unpublish(`/${$scope.selectedWorkspace.name}/*`).then(function (response) {
+                messageHub.hideStatusBusy();
                 if (response.status !== 201)
                     messageHub.setStatusError(`Unable to unpublish projects in '${$scope.selectedWorkspace.name}'`);
+                else messageHub.setStatusMessage(`Unpublished all projects in '${$scope.selectedWorkspace.name}'`);
             });
         };
 
@@ -635,6 +645,75 @@ projectsView.controller('ProjectsViewController', [
                 'Creating...',
             );
         };
+
+        $scope.cloneProject = function (node) {
+            let title = 'Clone project';
+            let workspaces = [];
+            for (let i = 0; i < $scope.workspaceNames.length; i++) {
+                workspaces.push({
+                    label: $scope.workspaceNames[i],
+                    value: $scope.workspaceNames[i],
+                });
+            }
+            let dialogItems = [{
+                id: 'pgfd1',
+                type: 'dropdown',
+                label: 'Clone in workspace',
+                required: true,
+                value: $scope.selectedWorkspace.name,
+                items: workspaces,
+            }];
+            if (!node) {
+                let projectNames = [];
+                let root = $scope.jstreeWidget.jstree(true).get_node('#');
+                for (let i = 0; i < root.children.length; i++) {
+                    let name = $scope.jstreeWidget.jstree(true).get_text(root.children[i])
+                    projectNames.push({
+                        label: name,
+                        value: name,
+                    });
+                }
+                dialogItems.push({
+                    id: 'pgfd2',
+                    type: 'dropdown',
+                    label: 'Project',
+                    required: true,
+                    value: '',
+                    items: projectNames,
+                });
+            } else {
+                $scope.cloneProjectData.originalPath = node.data.path;
+                $scope.cloneProjectData.originalWorkspace = node.data.workspace;
+                title = `Clone project '${node.text}'`;
+            }
+            dialogItems.push({
+                id: "pgfi1",
+                type: "input",
+                label: "Cloned project name",
+                required: true,
+                placeholder: "project name",
+                pattern: '^[^/]*$',
+                value: node.text || '',
+            });
+            messageHub.showFormDialog(
+                'cloneProjectForm',
+                title,
+                dialogItems,
+                [{
+                    id: 'b1',
+                    type: 'emphasized',
+                    label: 'Clone',
+                    whenValid: true,
+                },
+                {
+                    id: 'b2',
+                    type: 'transparent',
+                    label: 'Cancel',
+                }],
+                'projects.clone.project',
+                'Cloning...',
+            );
+        }
 
         $scope.createWorkspace = function () {
             messageHub.showFormDialog(
@@ -835,20 +914,10 @@ projectsView.controller('ProjectsViewController', [
             });
         }
 
-        // Initialization
-
-        if (!$scope.selectedWorkspace.name) {
-            $scope.selectedWorkspace = { name: 'workspace' }; // Default
-            saveSelectedWorkspace();
-        }
-        $scope.reloadWorkspace(true);
-        $scope.reloadWorkspaceList();
-        $scope.loadTemplates();
-
         // Temp
-        $scope.test = function () {
-            messageHub.postMessage('projects.tree.select', { filePath: '/ide/index.html' }, true);
-        };
+        // $scope.test = function () {
+        //     messageHub.postMessage('projects.tree.select', { filePath: '/ide/index.html' }, true);
+        // };
 
         messageHub.onDidReceiveMessage(
             'projects.tree.select',
@@ -879,7 +948,7 @@ projectsView.controller('ProjectsViewController', [
                     workspaceApi.createWorkspace(msg.data.formData[0].value).then(function (response) {
                         messageHub.hideFormDialog('createWorkspaceForm');
                         if (response.status !== 201) {
-                            messageHub.announceAlertError(
+                            messageHub.showAlertError(
                                 'Failed to create workspace',
                                 `An unexpected error has occurred while trying create a workspace named '${msg.data.formData[0].value}'`
                             );
@@ -887,9 +956,57 @@ projectsView.controller('ProjectsViewController', [
                         } else {
                             $scope.reloadWorkspaceList();
                             messageHub.setStatusMessage(`Created workspace '${msg.data.formData[0].value}'`);
+                            messageHub.triggerEvent('ide.workspaces.changed', true);
                         }
                     });
                 } else messageHub.hideFormDialog('createWorkspaceForm');
+            },
+            true
+        );
+
+        messageHub.onDidReceiveMessage(
+            'projects.clone.project',
+            function (msg) {
+                if (msg.data.buttonId === "b1") {
+                    let originalPath;
+                    let originalWorkspace;
+                    let clonePath;
+                    if (msg.data.formData[1].type === 'dropdown') {
+                        let root = $scope.jstreeWidget.jstree(true).get_node('#');
+                        for (let i = 0; i < root.children.length; i++) {
+                            let child = $scope.jstreeWidget.jstree(true).get_node(root.children[i]);
+                            if (child.text === msg.data.formData[1].value) {
+                                originalPath = child.data.path;
+                                originalWorkspace = child.data.workspace;
+                                break;
+                            }
+                        }
+                        clonePath = `/${msg.data.formData[2].value}`;
+                    } else {
+                        originalWorkspace = $scope.cloneProjectData.originalWorkspace
+                        originalPath = $scope.cloneProjectData.originalPath;
+                        clonePath = `/${msg.data.formData[1].value}`;
+                    }
+                    workspaceApi.copy(
+                        originalPath,
+                        clonePath,
+                        originalWorkspace,
+                        msg.data.formData[0].value,
+                    ).then(function (response) {
+                        if (response.status === 201) {
+                            if (msg.data.formData[0].value !== $scope.selectedWorkspace.name)
+                                $scope.reloadWorkspace(); // Temp
+                            messageHub.setStatusMessage(`Cloned '${originalPath}'`);
+                        } else {
+                            messageHub.setStatusError(`Unable to clone '${originalPath}'`);
+                            messageHub.showAlertError(
+                                'Failed to clone project',
+                                `An unexpected error has occurred while trying clone '${originalPath}'`,
+                            );
+                        }
+                        messageHub.hideFormDialog('cloneProjectForm');
+                    });
+                } else messageHub.hideFormDialog('cloneProjectForm');
             },
             true
         );
@@ -901,7 +1018,7 @@ projectsView.controller('ProjectsViewController', [
                     workspaceApi.createProject($scope.selectedWorkspace.name, msg.data.formData[0].value).then(function (response) {
                         messageHub.hideFormDialog('createProjectForm');
                         if (response.status !== 201) {
-                            messageHub.announceAlertError(
+                            messageHub.showAlertError(
                                 'Failed to create project',
                                 `An unexpected error has occurred while trying create a project named '${msg.data.formData[0].value}'`
                             );
@@ -923,7 +1040,7 @@ projectsView.controller('ProjectsViewController', [
                     workspaceApi.linkProject($scope.selectedWorkspace.name, msg.data.formData[0].value, msg.data.formData[1].value).then(function (response) {
                         messageHub.hideFormDialog('linkProjectForm');
                         if (response.status !== 201) {
-                            messageHub.announceAlertError(
+                            messageHub.showAlertError(
                                 'Failed to link project',
                                 `An unexpected error has occurred while trying to link project '${msg.data.formData[0].value}'`
                             );
@@ -959,7 +1076,7 @@ projectsView.controller('ProjectsViewController', [
                             messageHub.setStatusMessage('Successfully generated from template.');
                             $scope.reloadWorkspace();
                         } else {
-                            messageHub.announceAlertError(
+                            messageHub.showAlertError(
                                 'Failed to generate from template',
                                 `An unexpected error has occurred while trying generate from template '${template.name}'`
                             );
@@ -1028,7 +1145,7 @@ projectsView.controller('ProjectsViewController', [
                         ).then(function (response) {
                             messageHub.hideFormDialog("projectGenerateForm2");
                             if (response.status !== 201) {
-                                messageHub.announceAlertError(
+                                messageHub.showAlertError(
                                     'Failed to generate from model',
                                     `An unexpected error has occurred while trying generate from model '${$scope.gmodel.model}'`
                                 );
@@ -1088,10 +1205,14 @@ projectsView.controller('ProjectsViewController', [
                     $scope.jstreeWidget.jstree(true).copy(msg.data.data);
                 } else if (msg.data.itemId === 'paste') {
                     $scope.jstreeWidget.jstree(true).paste(msg.data.data);
-                } else if (msg.data.itemId === 'pasteProject') {
-                    $scope.jstreeWidget.jstree(true).paste($scope.jstreeWidget.jstree(true).get_node('#'));
+                } else if (msg.data.itemId === 'cloneProject') {
+                    $scope.cloneProject(msg.data.data);
                 } else if (msg.data.itemId === 'exportProject') {
                     transportApi.exportProject(msg.data.data.data.workspace, msg.data.data.text);
+                } else if (msg.data.itemId === 'unpublishAll') {
+                    $scope.unpublishAll();
+                } else if (msg.data.itemId === 'publishAll') {
+                    $scope.publishAll();
                 } else if (msg.data.itemId === 'publish') {
                     publisherApi.publish(msg.data.data).then(function (response) {
                         if (response.status !== 201)
@@ -1246,4 +1367,14 @@ projectsView.controller('ProjectsViewController', [
             },
             true
         );
+
+        // Initialization
+
+        if (!$scope.selectedWorkspace.name) {
+            $scope.selectedWorkspace = { name: 'workspace' }; // Default
+            saveSelectedWorkspace();
+        }
+        $scope.reloadWorkspace(true);
+        $scope.reloadWorkspaceList();
+        $scope.loadTemplates();
     }]);
