@@ -43,7 +43,7 @@ projectsView.controller('ProjectsViewController', [
             model: '',
             parameters: {},
         };
-        $scope.cloneProjectData = {};
+        $scope.duplicateProjectData = {};
         $scope.imageFileExts = ['ico', 'bmp', 'png', 'jpg', 'jpeg', 'gif', 'svg'];
         $scope.modelFileExts = ['extension', 'extensionpoint', 'edm', 'model', 'dsm', 'schema', 'bpmn', 'job', 'listener', 'websocket', 'roles', 'constraints', 'table', 'view'];
 
@@ -282,6 +282,12 @@ projectsView.controller('ProjectsViewController', [
                                 id: "unpublishAll",
                                 label: "Unpublish All",
                                 icon: "sap-icon--arrow-bottom",
+                            },
+                            {
+                                id: "exportProjects",
+                                label: "Export all",
+                                icon: "sap-icon--download-from-cloud",
+                                divider: true,
                             }
                         ]
                     }
@@ -377,8 +383,8 @@ projectsView.controller('ProjectsViewController', [
                             items: [
                                 newSubmenu,
                                 {
-                                    id: "cloneProject",
-                                    label: "Clone",
+                                    id: "duplicateProject",
+                                    label: "Duplicate",
                                     divider: true,
                                     icon: "sap-icon--duplicate",
                                     data: node,
@@ -579,6 +585,10 @@ projectsView.controller('ProjectsViewController', [
             messageHub.triggerEvent('editor.file.save.all', true);
         };
 
+        $scope.exportProjects = function () {
+            transportApi.exportProject($scope.selectedWorkspace.name, '*');
+        };
+
         $scope.linkProject = function () {
             messageHub.showFormDialog(
                 'linkProjectForm',
@@ -646,8 +656,8 @@ projectsView.controller('ProjectsViewController', [
             );
         };
 
-        $scope.cloneProject = function (node) {
-            let title = 'Clone project';
+        $scope.duplicateProject = function (node) {
+            let title = 'Duplicate project';
             let workspaces = [];
             for (let i = 0; i < $scope.workspaceNames.length; i++) {
                 workspaces.push({
@@ -658,7 +668,7 @@ projectsView.controller('ProjectsViewController', [
             let dialogItems = [{
                 id: 'pgfd1',
                 type: 'dropdown',
-                label: 'Clone in workspace',
+                label: 'Duplicate in workspace',
                 required: true,
                 value: $scope.selectedWorkspace.name,
                 items: workspaces,
@@ -682,27 +692,27 @@ projectsView.controller('ProjectsViewController', [
                     items: projectNames,
                 });
             } else {
-                $scope.cloneProjectData.originalPath = node.data.path;
-                $scope.cloneProjectData.originalWorkspace = node.data.workspace;
-                title = `Clone project '${node.text}'`;
+                $scope.duplicateProjectData.originalPath = node.data.path;
+                $scope.duplicateProjectData.originalWorkspace = node.data.workspace;
+                title = `Duplicate project '${node.text}'`;
             }
             dialogItems.push({
                 id: "pgfi1",
                 type: "input",
-                label: "Cloned project name",
+                label: "Duplicated project name",
                 required: true,
                 placeholder: "project name",
                 pattern: '^[^/]*$',
                 value: node.text || '',
             });
             messageHub.showFormDialog(
-                'cloneProjectForm',
+                'duplicateProjectForm',
                 title,
                 dialogItems,
                 [{
                     id: 'b1',
                     type: 'emphasized',
-                    label: 'Clone',
+                    label: 'Duplicate',
                     whenValid: true,
                 },
                 {
@@ -710,8 +720,8 @@ projectsView.controller('ProjectsViewController', [
                     type: 'transparent',
                     label: 'Cancel',
                 }],
-                'projects.clone.project',
-                'Cloning...',
+                'projects.duplicate.project',
+                'Duplicating...',
             );
         }
 
@@ -920,6 +930,23 @@ projectsView.controller('ProjectsViewController', [
         // };
 
         messageHub.onDidReceiveMessage(
+            'ide.workspace.changed',
+            function (msg) {
+                if (msg.data.workspace === $scope.selectedWorkspace.name)
+                    $scope.reloadWorkspace();
+            },
+            true
+        );
+
+        messageHub.onDidReceiveMessage(
+            'projects.export.all',
+            function () {
+                $scope.exportProjects();
+            },
+            true
+        );
+
+        messageHub.onDidReceiveMessage(
             'projects.tree.select',
             function (msg) {
                 let objects = $scope.jstreeWidget.jstree(true).get_json(
@@ -965,12 +992,12 @@ projectsView.controller('ProjectsViewController', [
         );
 
         messageHub.onDidReceiveMessage(
-            'projects.clone.project',
+            'projects.duplicate.project',
             function (msg) {
                 if (msg.data.buttonId === "b1") {
                     let originalPath;
                     let originalWorkspace;
-                    let clonePath;
+                    let duplicatePath;
                     if (msg.data.formData[1].type === 'dropdown') {
                         let root = $scope.jstreeWidget.jstree(true).get_node('#');
                         for (let i = 0; i < root.children.length; i++) {
@@ -981,32 +1008,32 @@ projectsView.controller('ProjectsViewController', [
                                 break;
                             }
                         }
-                        clonePath = `/${msg.data.formData[2].value}`;
+                        duplicatePath = `/${msg.data.formData[2].value}`;
                     } else {
-                        originalWorkspace = $scope.cloneProjectData.originalWorkspace
-                        originalPath = $scope.cloneProjectData.originalPath;
-                        clonePath = `/${msg.data.formData[1].value}`;
+                        originalWorkspace = $scope.duplicateProjectData.originalWorkspace
+                        originalPath = $scope.duplicateProjectData.originalPath;
+                        duplicatePath = `/${msg.data.formData[1].value}`;
                     }
                     workspaceApi.copy(
                         originalPath,
-                        clonePath,
+                        duplicatePath,
                         originalWorkspace,
                         msg.data.formData[0].value,
                     ).then(function (response) {
                         if (response.status === 201) {
                             if (msg.data.formData[0].value !== $scope.selectedWorkspace.name)
                                 $scope.reloadWorkspace(); // Temp
-                            messageHub.setStatusMessage(`Cloned '${originalPath}'`);
+                            messageHub.setStatusMessage(`Duplicated '${originalPath}'`);
                         } else {
-                            messageHub.setStatusError(`Unable to clone '${originalPath}'`);
+                            messageHub.setStatusError(`Unable to duplicate '${originalPath}'`);
                             messageHub.showAlertError(
-                                'Failed to clone project',
-                                `An unexpected error has occurred while trying clone '${originalPath}'`,
+                                'Failed to duplicate project',
+                                `An unexpected error has occurred while trying duplicate '${originalPath}'`,
                             );
                         }
-                        messageHub.hideFormDialog('cloneProjectForm');
+                        messageHub.hideFormDialog('duplicateProjectForm');
                     });
-                } else messageHub.hideFormDialog('cloneProjectForm');
+                } else messageHub.hideFormDialog('duplicateProjectForm');
             },
             true
         );
@@ -1014,7 +1041,9 @@ projectsView.controller('ProjectsViewController', [
         messageHub.onDidReceiveMessage(
             'projects.create.project',
             function (msg) {
-                if (msg.data.buttonId === "b1") {
+                if (msg.data.isMenu) {
+                    $scope.createProject();
+                } else if (msg.data.buttonId === "b1") {
                     workspaceApi.createProject($scope.selectedWorkspace.name, msg.data.formData[0].value).then(function (response) {
                         messageHub.hideFormDialog('createProjectForm');
                         if (response.status !== 201) {
@@ -1036,7 +1065,9 @@ projectsView.controller('ProjectsViewController', [
         messageHub.onDidReceiveMessage(
             'projects.link.project',
             function (msg) {
-                if (msg.data.buttonId === "b1") {
+                if (msg.data.isMenu) {
+                    $scope.linkProject();
+                } else if (msg.data.buttonId === "b1") {
                     workspaceApi.linkProject($scope.selectedWorkspace.name, msg.data.formData[0].value, msg.data.formData[1].value).then(function (response) {
                         messageHub.hideFormDialog('linkProjectForm');
                         if (response.status !== 201) {
@@ -1205,8 +1236,10 @@ projectsView.controller('ProjectsViewController', [
                     $scope.jstreeWidget.jstree(true).copy(msg.data.data);
                 } else if (msg.data.itemId === 'paste') {
                     $scope.jstreeWidget.jstree(true).paste(msg.data.data);
-                } else if (msg.data.itemId === 'cloneProject') {
-                    $scope.cloneProject(msg.data.data);
+                } else if (msg.data.itemId === 'duplicateProject') {
+                    $scope.duplicateProject(msg.data.data);
+                } else if (msg.data.itemId === 'exportProjects') {
+                    $scope.exportProjects();
                 } else if (msg.data.itemId === 'exportProject') {
                     transportApi.exportProject(msg.data.data.data.workspace, msg.data.data.text);
                 } else if (msg.data.itemId === 'unpublishAll') {
