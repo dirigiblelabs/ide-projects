@@ -408,7 +408,6 @@ projectsView.controller('ProjectsViewController', [
                         };
                         if ($scope.genericTemplates.length) {
                             menuObj.items.push(generateObj);
-                            menuObj.items.push(generateObj);
                             setMenuTemplateItems(node.id, menuObj, node.data.workspace, node.data.path, node.children);
                         }
                         menuObj.items.push({
