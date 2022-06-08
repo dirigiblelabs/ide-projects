@@ -950,6 +950,27 @@ projectsView.controller('ProjectsViewController', [
                 else
                     messageHub.announcePublish(data);
             });
+            // Temp solution until we fix the back-end API
+            if (data.status) {
+                let objects = $scope.jstreeWidget.jstree(true).get_json(
+                    $scope.jstreeWidget.jstree(true).root,
+                    {
+                        no_li_attr: true,
+                        no_a_attr: true,
+                        flat: true
+                    }
+                );
+                for (let i = 0; i < objects.length; i++) {
+                    if (objects[i].data.path === data.path) {
+                        let node = $scope.jstreeWidget.jstree(true).get_node(objects[i]);
+                        if (data.status === 'modified')
+                            node.state.status = 'M';
+                        else node.state.status = undefined;
+                        $scope.jstreeWidget.jstree(true).redraw_node(node.id);
+                        break;
+                    }
+                }
+            }
         });
 
         messageHub.onDidReceiveMessage(
