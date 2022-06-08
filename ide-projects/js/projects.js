@@ -162,23 +162,13 @@ projectsView.controller('ProjectsViewController', [
                 let spinnerId = showSpinner(parent);
                 let workspace;
                 let path;
-                if (copyObj.parent === '#') {
-                    workspace = $scope.selectedWorkspace.name;
-                    path = copyObj.original.data.path;
-                    copyObj.node.data = {
-                        path: path,
-                        contentType: copyObj.original.data.contentType,
-                        workspace: workspace,
-                    };
-                } else {
-                    workspace = parent.data.workspace;
-                    path = (parent.data.path.endsWith('/') ? parent.data.path : parent.data.path + '/') + copyObj.node.text;
-                    copyObj.node.data = {
-                        path: path,
-                        contentType: copyObj.original.data.contentType,
-                        workspace: workspace,
-                    };
-                }
+                workspace = parent.data.workspace;
+                path = (parent.data.path.endsWith('/') ? parent.data.path : parent.data.path + '/');
+                copyObj.node.data = {
+                    path: path,
+                    contentType: copyObj.original.data.contentType,
+                    workspace: workspace,
+                };
                 workspaceApi.copy(
                     copyObj.original.data.path,
                     path,
