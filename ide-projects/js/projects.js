@@ -944,7 +944,12 @@ projectsView.controller('ProjectsViewController', [
 
         messageHub.onFileSaved(function (data) {
             delete data.topic;
-            messageHub.announcePublish(data);
+            publisherApi.publish(`/${data.workspace}${data.path}`).then(function (response) {
+                if (response.status !== 201)
+                    messageHub.setStatusError(`Unable to publish '${data.path}'`);
+                else
+                    messageHub.announcePublish(data);
+            });
         });
 
         messageHub.onDidReceiveMessage(
