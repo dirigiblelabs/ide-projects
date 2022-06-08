@@ -120,7 +120,6 @@ projectsView.controller('ProjectsViewController', [
         });
 
         $scope.jstreeWidget.on('rename_node.jstree', function (event, data) {
-            console.log('rename', data);
             if (!data.node.state.failedRename) {
                 if (data.old !== data.text) {
                     let validate = new RegExp('^[^/]+$');
@@ -772,7 +771,6 @@ projectsView.controller('ProjectsViewController', [
 
         let to = 0;
         $scope.search = function () {
-            console.log($scope.searchField.text);
             if (to) { clearTimeout(to); }
             to = setTimeout(function () {
                 $scope.jstreeWidget.jstree(true).search($scope.searchField.text);
