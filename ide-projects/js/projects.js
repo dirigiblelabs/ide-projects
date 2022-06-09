@@ -387,6 +387,7 @@ projectsView.controller('ProjectsViewController', [
                         id: "importZip",
                         label: "Import from zip",
                         icon: "sap-icon--attachment-zip-file",
+                        divider: true,
                         data: node,
                     };
                     if (node.type === 'project') {
@@ -412,6 +413,8 @@ projectsView.controller('ProjectsViewController', [
                             menuObj.items.push(generateObj);
                             setMenuTemplateItems(node.id, menuObj, node.data.workspace, node.data.path, node.children);
                         }
+                        // menuObj.items.push(importObj);
+                        menuObj.items.push(importZipObj);
                         menuObj.items.push({
                             id: "exportProject",
                             label: "Export",
@@ -419,8 +422,6 @@ projectsView.controller('ProjectsViewController', [
                             divider: true,
                             data: node,
                         });
-                        // menuObj.items.push(importObj);
-                        menuObj.items.push(importZipObj);
                         return menuObj;
                     } else if (node.type === "folder") {
                         let menuObj = {
