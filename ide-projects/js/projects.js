@@ -376,6 +376,19 @@ projectsView.controller('ProjectsViewController', [
                         divider: true,
                         data: node,
                     };
+                    // let importObj = {
+                    //     id: "import",
+                    //     label: "Import",
+                    //     icon: "sap-icon--attachment",
+                    //     divider: true,
+                    //     data: node,
+                    // };
+                    let importZipObj = {
+                        id: "importZip",
+                        label: "Import from zip",
+                        icon: "sap-icon--attachment-zip-file",
+                        data: node,
+                    };
                     if (node.type === 'project') {
                         let menuObj = {
                             callbackTopic: 'projects.tree.contextmenu',
@@ -406,6 +419,8 @@ projectsView.controller('ProjectsViewController', [
                             divider: true,
                             data: node,
                         });
+                        // menuObj.items.push(importObj);
+                        menuObj.items.push(importZipObj);
                         return menuObj;
                     } else if (node.type === "folder") {
                         let menuObj = {
@@ -420,6 +435,8 @@ projectsView.controller('ProjectsViewController', [
                                 publishObj,
                                 unpublishObj,
                                 generateObj,
+                                // importObj,
+                                importZipObj,
                             ]
                         };
                         setMenuTemplateItems(node.id, menuObj, node.data.workspace, node.data.path, node.children);
@@ -1273,6 +1290,23 @@ projectsView.controller('ProjectsViewController', [
                     $scope.exportProjects();
                 } else if (msg.data.itemId === 'exportProject') {
                     transportApi.exportProject(msg.data.data.data.workspace, msg.data.data.text);
+                } else if (msg.data.itemId === 'import') {
+                    messageHub.showDialogWindow(
+                        "import",
+                        {
+                            importType: 'file',
+                            uploadPath: msg.data.data.data.path,
+                            workspace: msg.data.data.data.workspace,
+                        }
+                    );
+                } else if (msg.data.itemId === 'importZip') {
+                    messageHub.showDialogWindow(
+                        "import",
+                        {
+                            uploadPath: msg.data.data.data.path,
+                            workspace: msg.data.data.data.workspace,
+                        }
+                    );
                 } else if (msg.data.itemId === 'unpublishAll') {
                     $scope.unpublishAll();
                 } else if (msg.data.itemId === 'publishAll') {
