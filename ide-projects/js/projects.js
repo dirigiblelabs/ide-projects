@@ -290,6 +290,8 @@ projectsView.controller('ProjectsViewController', [
                             }
                         ]
                     }
+                } else {
+                    id = element.id;
                 }
                 if (id) {
                     let node = $scope.jstreeWidget.jstree(true).get_node(id);
