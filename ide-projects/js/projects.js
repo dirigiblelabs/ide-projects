@@ -82,22 +82,30 @@ projectsView.controller('ProjectsViewController', [
                     return true;
                 },
             },
-            state: { "key": "ideWorkspace" },
+            state: { "key": "ideProjectsState" },
             types: {
+                '#': {
+                    valid_children: ["project"]
+                },
                 "default": {
-                    icon: "sap-icon--question-mark"
+                    icon: "sap-icon--question-mark",
+                    valid_children: [],
                 },
                 file: {
-                    icon: "jstree-file"
+                    icon: "jstree-file",
+                    valid_children: [],
                 },
                 folder: {
-                    icon: "jstree-folder"
+                    icon: "jstree-folder",
+                    valid_children: ['folder', 'file', 'spinner'],
                 },
                 project: {
-                    icon: "jstree-project"
+                    icon: "jstree-project",
+                    valid_children: ['folder', 'file', 'spinner'],
                 },
                 spinner: {
-                    icon: "jstree-spinner"
+                    icon: "jstree-spinner",
+                    valid_children: [],
                 },
             },
         };
@@ -164,7 +172,7 @@ projectsView.controller('ProjectsViewController', [
                 workspace = parent.data.workspace;
                 path = (parent.data.path.endsWith('/') ? parent.data.path : parent.data.path + '/');
                 copyObj.node.data = {
-                    path: path,
+                    path: path + copyObj.node.text,
                     contentType: copyObj.original.data.contentType,
                     workspace: workspace,
                 };
@@ -175,6 +183,13 @@ projectsView.controller('ProjectsViewController', [
                     workspace,
                 ).then(function (response) {
                     if (response.status === 201) {
+                        for (let i = 0; i < parent.children.length; i++) { // Temp solution
+                            let node = $scope.jstreeWidget.jstree(true).get_node(parent.children[i]);
+                            if (node.text === copyObj.node.text && node.id !== copyObj.node.id) {
+                                $scope.reloadWorkspace();
+                                return;
+                            }
+                        }
                         $scope.jstreeWidget.jstree(true).show_node(copyObj.node);
                     } else {
                         copyObj.node.state.failedCopy = true;
@@ -188,8 +203,21 @@ projectsView.controller('ProjectsViewController', [
 
         $scope.jstreeWidget.on('move_node.jstree', function (event, moveObj) {
             if (!moveObj.node.state.failedMove) {
-                $scope.jstreeWidget.jstree(true).hide_node(moveObj.node);
                 let parent = $scope.jstreeWidget.jstree(true).get_node(moveObj.parent);
+                for (let i = 0; i < parent.children.length; i++) { // Temp solution
+                    let node = $scope.jstreeWidget.jstree(true).get_node(parent.children[i]);
+                    if (node.text === moveObj.node.text && node.id !== moveObj.node.id) {
+                        moveObj.node.state.failedMove = true;
+                        $scope.jstreeWidget.jstree(true).move_node(
+                            moveObj.node,
+                            $scope.jstreeWidget.jstree(true).get_node(moveObj.old_parent),
+                            moveObj.old_position,
+                        );
+                        messageHub.showAlertError('Could not move file', 'The destination contains a file with the same name.');
+                        return;
+                    }
+                }
+                $scope.jstreeWidget.jstree(true).hide_node(moveObj.node);
                 let spinnerId = showSpinner(parent);
                 workspaceApi.move(
                     moveObj.node.data.path,
@@ -201,7 +229,7 @@ projectsView.controller('ProjectsViewController', [
                         moveObj.node.data.workspace = parent.data.workspace;
                         $scope.jstreeWidget.jstree(true).show_node(moveObj.node);
                     } else {
-                        data.node.state.failedMove = true;
+                        moveObj.node.state.failedMove = true;
                         messageHub.setStatusError(`Unable to move '${moveObj.node.text}'.`);
                         $scope.jstreeWidget.jstree(true).move_node(
                             moveObj.node,
