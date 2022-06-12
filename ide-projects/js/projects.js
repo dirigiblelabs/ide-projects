@@ -48,6 +48,10 @@ projectsView.controller('ProjectsViewController', [
         $scope.modelFileExts = ['extension', 'extensionpoint', 'edm', 'model', 'dsm', 'schema', 'bpmn', 'job', 'listener', 'websocket', 'roles', 'constraints', 'table', 'view'];
 
         $scope.selectedWorkspace = JSON.parse(localStorage.getItem('DIRIGIBLE.workspace') || '{}');
+        if (!$scope.selectedWorkspace.name) {
+            $scope.selectedWorkspace = { name: 'workspace' }; // Default
+            saveSelectedWorkspace();
+        }
 
         $scope.projects = [];
 
@@ -82,7 +86,7 @@ projectsView.controller('ProjectsViewController', [
                     return true;
                 },
             },
-            state: { "key": "ideProjectsState" },
+            state: { key: 'ide-projects' },
             types: {
                 '#': {
                     valid_children: ["project"]
@@ -301,9 +305,15 @@ projectsView.controller('ProjectsViewController', [
                         callbackTopic: "projects.tree.contextmenu",
                         items: [
                             {
+                                id: "newProject",
+                                label: "New Project",
+                                icon: "sap-icon--create",
+                            },
+                            {
                                 id: "publishAll",
                                 label: "Publish All",
                                 icon: "sap-icon--arrow-top",
+                                divider: true,
                             },
                             {
                                 id: "unpublishAll",
@@ -707,6 +717,7 @@ projectsView.controller('ProjectsViewController', [
 
         $scope.duplicateProject = function (node) {
             let title = 'Duplicate project';
+            let projectName = '';
             let workspaces = [];
             for (let i = 0; i < $scope.workspaceNames.length; i++) {
                 workspaces.push({
@@ -741,6 +752,7 @@ projectsView.controller('ProjectsViewController', [
                     items: projectNames,
                 });
             } else {
+                projectName = `${node.text} 2`;
                 $scope.duplicateProjectData.originalPath = node.data.path;
                 $scope.duplicateProjectData.originalWorkspace = node.data.workspace;
                 title = `Duplicate project '${node.text}'`;
@@ -752,7 +764,7 @@ projectsView.controller('ProjectsViewController', [
                 required: true,
                 placeholder: "project name",
                 pattern: '^[^/]*$',
-                value: node.text || '',
+                value: projectName,
             });
             messageHub.showFormDialog(
                 'duplicateProjectForm',
@@ -1315,6 +1327,8 @@ projectsView.controller('ProjectsViewController', [
                     $scope.jstreeWidget.jstree(true).copy(msg.data.data);
                 } else if (msg.data.itemId === 'paste') {
                     $scope.jstreeWidget.jstree(true).paste(msg.data.data);
+                } else if (msg.data.itemId === 'newProject') {
+                    $scope.createProject();
                 } else if (msg.data.itemId === 'duplicateProject') {
                     $scope.duplicateProject(msg.data.data);
                 } else if (msg.data.itemId === 'exportProjects') {
@@ -1502,11 +1516,6 @@ projectsView.controller('ProjectsViewController', [
         );
 
         // Initialization
-
-        if (!$scope.selectedWorkspace.name) {
-            $scope.selectedWorkspace = { name: 'workspace' }; // Default
-            saveSelectedWorkspace();
-        }
         $scope.reloadWorkspace(true);
         $scope.reloadWorkspaceList();
         $scope.loadTemplates();
