@@ -854,6 +854,7 @@ projectsView.controller('ProjectsViewController', [
                     if (response.status === 204) {
                         $scope.switchWorkspace('workspace');
                         $scope.reloadWorkspaceList();
+                        messageHub.announceWorkspacesModified();
                     } else {
                         messageHub.setStatusError(`Unable to delete workspace '${$scope.selectedWorkspace.name}'`);
                     }
@@ -1123,7 +1124,7 @@ projectsView.controller('ProjectsViewController', [
                         } else {
                             $scope.reloadWorkspaceList();
                             messageHub.setStatusMessage(`Created workspace '${msg.data.formData[0].value}'`);
-                            messageHub.triggerEvent('ide.workspaces.changed', true);
+                            messageHub.announceWorkspacesModified();
                         }
                     });
                 } else messageHub.hideFormDialog('createWorkspaceForm');
