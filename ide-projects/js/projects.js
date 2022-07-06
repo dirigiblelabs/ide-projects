@@ -691,7 +691,10 @@ projectsView.controller('ProjectsViewController', [
                         label: "Name",
                         required: true,
                         placeholder: "project name",
-                        pattern: '^[^/]*$',
+                        inputRules: {
+                            // excluded: [], //TODO
+                            patterns: ['^[^/]*$'],
+                        },
                     },
                     {
                         id: "pgfi2",
@@ -728,7 +731,10 @@ projectsView.controller('ProjectsViewController', [
                         label: "Name",
                         required: true,
                         placeholder: "project name",
-                        pattern: '^[^/]*$',
+                        inputRules: {
+                            // excluded: [], //TODO
+                            patterns: ['^[^/]*$'],
+                        },
                     },
                 ],
                 [{
@@ -795,7 +801,10 @@ projectsView.controller('ProjectsViewController', [
                 label: "Duplicated project name",
                 required: true,
                 placeholder: "project name",
-                pattern: '^[^/]*$',
+                inputRules: {
+                    // excluded: [], //TODO
+                    patterns: ['^[^/]*$'],
+                },
                 value: projectName,
             });
             messageHub.showFormDialog(
@@ -829,7 +838,10 @@ projectsView.controller('ProjectsViewController', [
                         label: "Name",
                         required: true,
                         placeholder: "workspace name",
-                        pattern: '^[^/]*$',
+                        inputRules: {
+                            excluded: ['workspace'], //TODO
+                            patterns: ['^[^/]*$'],
+                        },
                     },
                 ],
                 [{
@@ -1546,7 +1558,10 @@ projectsView.controller('ProjectsViewController', [
                                     type: "input",
                                     label: "Model (must be in the root of the project)",
                                     required: true,
-                                    pattern: '^[^/]*$',
+                                    inputRules: {
+                                        // excluded: [], //TODO
+                                        patterns: ['^[^/]*$'],
+                                    },
                                     placeholder: "file.model",
                                     value: msg.data.data.data.path.substring(project.length + 2),
                                 },
