@@ -862,13 +862,30 @@ projectsView.controller('ProjectsViewController', [
 
         $scope.deleteWorkspace = function () {
             if ($scope.selectedWorkspace.name !== 'workspace') {
-                workspaceApi.deleteWorkspace($scope.selectedWorkspace.name).then(function (response) {
-                    if (response.status === 204) {
-                        $scope.switchWorkspace('workspace');
-                        $scope.reloadWorkspaceList();
-                        messageHub.announceWorkspacesModified();
-                    } else {
-                        messageHub.setStatusError(`Unable to delete workspace '${$scope.selectedWorkspace.name}'`);
+                messageHub.showDialogAsync(
+                    'Delete workspace?',
+                    `Are you sure you want to delete workspace "${$scope.selectedWorkspace.name}"? This action cannot be undone.`,
+                    [{
+                        id: "b1",
+                        type: "emphasized",
+                        label: "Yes",
+                    },
+                    {
+                        id: "b3",
+                        type: "normal",
+                        label: "No",
+                    }],
+                ).then(function (msg) {
+                    if (msg.data === "b1") {
+                        workspaceApi.deleteWorkspace($scope.selectedWorkspace.name).then(function (response) {
+                            if (response.status === 204) {
+                                $scope.switchWorkspace('workspace');
+                                $scope.reloadWorkspaceList();
+                                messageHub.announceWorkspacesModified();
+                            } else {
+                                messageHub.setStatusError(`Unable to delete workspace '${$scope.selectedWorkspace.name}'`);
+                            }
+                        });
                     }
                 });
             }
