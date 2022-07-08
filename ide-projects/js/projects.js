@@ -317,6 +317,15 @@ projectsView.controller('ProjectsViewController', [
             }
         }
 
+        function getChildrenNames(node) {
+            let root = $scope.jstreeWidget.jstree(true).get_node(node);
+            let names = [];
+            for (let i = 0; i < root.children.length; i++) {
+                names.push($scope.jstreeWidget.jstree(true).get_text(root.children[i]));
+            }
+            return names;
+        }
+
         $scope.contextMenuContent = function (element) {
             if ($scope.jstreeWidget[0].contains(element)) {
                 let id;
@@ -654,13 +663,29 @@ projectsView.controller('ProjectsViewController', [
             });
         };
 
-        $scope.publish = function (path, workspace) {
+        $scope.publish = function (path, workspace, callback) {
             messageHub.showStatusBusy(`Publishing '${path}'...`);
             publisherApi.publish(path, workspace).then(function (response) {
                 messageHub.hideStatusBusy();
-                if (response.status !== 201)
+                if (response.status !== 201) {
                     messageHub.setStatusError(`Unable to publish '${path}'`);
-                else messageHub.setStatusMessage(`Published '${path}'`);
+                } else {
+                    messageHub.setStatusMessage(`Published '${path}'`);
+                    if (callback) callback();
+                }
+            });
+        };
+
+        $scope.unpublish = function (path, workspace, callback) {
+            messageHub.showStatusBusy(`Unpublishing '${path}'...`);
+            publisherApi.unpublish(path, workspace).then(function (response) {
+                messageHub.hideStatusBusy();
+                if (response.status !== 201) {
+                    messageHub.setStatusError(`Unable to unpublish '${path}'`);
+                } else {
+                    messageHub.setStatusMessage(`Unpublished '${path}'`);
+                    if (callback) callback();
+                }
             });
         };
 
@@ -674,6 +699,28 @@ projectsView.controller('ProjectsViewController', [
 
         $scope.saveAll = function () {
             messageHub.triggerEvent('editor.file.save.all', true);
+        };
+
+        $scope.deleteFileFolder = function (workspace, path, callback) {
+            workspaceApi.remove(workspace + path).then(function (response) {
+                if (response.status !== 204) {
+                    messageHub.setStatusError(`Unable to delete '${path}'.`);
+                } else {
+                    messageHub.setStatusMessage(`Deleted '${path}'.`);
+                    if (callback) callback();
+                }
+            });
+        };
+
+        $scope.deleteProject = function (workspace, project, callback) {
+            workspaceApi.deleteProject(workspace, project).then(function (response) {
+                if (response.status !== 204) {
+                    messageHub.setStatusError(`Unable to delete '${project}'.`);
+                } else {
+                    messageHub.setStatusMessage(`Deleted '${project}'.`);
+                    if (callback) callback();
+                }
+            });
         };
 
         $scope.exportProjects = function () {
@@ -692,8 +739,8 @@ projectsView.controller('ProjectsViewController', [
                         required: true,
                         placeholder: "project name",
                         inputRules: {
-                            // excluded: [], //TODO
-                            patterns: ['^[^/]*$'],
+                            excluded: getChildrenNames('#'),
+                            patterns: ['^[^/:]*$'],
                         },
                     },
                     {
@@ -732,8 +779,8 @@ projectsView.controller('ProjectsViewController', [
                         required: true,
                         placeholder: "project name",
                         inputRules: {
-                            // excluded: [], //TODO
-                            patterns: ['^[^/]*$'],
+                            excluded: getChildrenNames('#'),
+                            patterns: ['^[^/:]*$'],
                         },
                     },
                 ],
@@ -802,8 +849,8 @@ projectsView.controller('ProjectsViewController', [
                 required: true,
                 placeholder: "project name",
                 inputRules: {
-                    // excluded: [], //TODO
-                    patterns: ['^[^/]*$'],
+                    excluded: getChildrenNames('#'),
+                    patterns: ['^[^/:]*$'],
                 },
                 value: projectName,
             });
@@ -839,8 +886,8 @@ projectsView.controller('ProjectsViewController', [
                         required: true,
                         placeholder: "workspace name",
                         inputRules: {
-                            excluded: ['workspace'], //TODO
-                            patterns: ['^[^/]*$'],
+                            excluded: $scope.workspaceNames,
+                            patterns: ['^[^/:]*$'],
                         },
                     },
                 ],
@@ -1383,37 +1430,44 @@ projectsView.controller('ProjectsViewController', [
                 } else if (msg.data.itemId === 'rename') {
                     $scope.jstreeWidget.jstree(true).edit(msg.data.data);
                 } else if (msg.data.itemId === 'delete') {
-                    if (msg.data.data.type === 'project') {
-                        publisherApi.unpublish(msg.data.data.data.path, msg.data.data.data.workspace).then(function (unpublish) {
-                            if (unpublish.status !== 201) {
-                                messageHub.setStatusError(`Unable to unpublish '${msg.data.data.text}'.`);
+                    messageHub.showDialogAsync(
+                        `Delete '${msg.data.data.text}'?`,
+                        'This action cannot be undone. It is recommended that you unpublish and delete.',
+                        [{
+                            id: 'b1',
+                            type: 'negative',
+                            label: 'Delete',
+                        },
+                        {
+                            id: 'b2',
+                            type: 'emphasized',
+                            label: 'Delete & Unpublish',
+                        },
+                        {
+                            id: 'b3',
+                            type: 'normal',
+                            label: 'Cancel',
+                        }],
+                    ).then(function (dialogResponse) {
+                        function deleteNode() {
+                            $scope.jstreeWidget.jstree(true).delete_node(msg.data.data);
+                        };
+                        if (dialogResponse.data === 'b1') {
+                            if (msg.data.data.type === 'project') {
+                                $scope.deleteProject(msg.data.data.data.workspace, msg.data.data.text, deleteNode);
                             } else {
-                                workspaceApi.deleteProject(msg.data.data.data.workspace, msg.data.data.text).then(function (response) {
-                                    if (response.status !== 204) {
-                                        messageHub.setStatusError(`Unable to delete '${msg.data.data.text}'.`);
-                                    } else {
-                                        $scope.jstreeWidget.jstree(true).delete_node(msg.data.data);
-                                        messageHub.setStatusMessage(`Deleted and unpublished '${msg.data.data.text}'.`);
-                                    }
-                                });
+                                $scope.deleteFileFolder(msg.data.data.data.workspace, msg.data.data.data.path, deleteNode);
                             }
-                        });
-                    } else {
-                        publisherApi.unpublish(msg.data.data.data.path, msg.data.data.data.workspace).then(function (unpublish) {
-                            if (unpublish.status !== 201) {
-                                messageHub.setStatusError(`Unable to unpublish '${msg.data.data.text}'.`);
-                            } else {
-                                workspaceApi.remove(msg.data.data.data.workspace + msg.data.data.data.path).then(function (response) {
-                                    if (response.status !== 204) {
-                                        messageHub.setStatusError(`Unable to delete '${msg.data.data.text}'.`);
-                                    } else {
-                                        $scope.jstreeWidget.jstree(true).delete_node(msg.data.data);
-                                        messageHub.setStatusMessage(`Deleted and unpublished '${msg.data.data.text}'.`);
-                                    }
-                                });
-                            }
-                        });
-                    }
+                        } else if (dialogResponse.data === 'b2') {
+                            $scope.unpublish(msg.data.data.data.path, msg.data.data.data.workspace, function () {
+                                if (msg.data.data.type === 'project') {
+                                    $scope.deleteProject(msg.data.data.data.workspace, msg.data.data.text, deleteNode);
+                                } else {
+                                    $scope.deleteFileFolder(msg.data.data.data.workspace, msg.data.data.data.path, deleteNode);
+                                }
+                            });
+                        }
+                    });
                 } else if (msg.data.itemId === 'cut') {
                     $scope.jstreeWidget.jstree(true).cut(msg.data.data);
                 } else if (msg.data.itemId === 'copy') {
@@ -1577,7 +1631,7 @@ projectsView.controller('ProjectsViewController', [
                                     required: true,
                                     inputRules: {
                                         // excluded: [], //TODO
-                                        patterns: ['^[^/]*$'],
+                                        patterns: ['^[^/:]*$'],
                                     },
                                     placeholder: "file.model",
                                     value: msg.data.data.data.path.substring(project.length + 2),
