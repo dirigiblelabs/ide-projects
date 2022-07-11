@@ -43,6 +43,11 @@ projectsView.controller('ProjectsViewController', [
             model: '',
             parameters: {},
         };
+        $scope.newNodeData = {
+            parent: '',
+            workspace: '',
+            path: '',
+        };
         $scope.duplicateProjectData = {};
         $scope.imageFileExts = ['ico', 'bmp', 'png', 'jpg', 'jpeg', 'gif', 'svg'];
         $scope.modelFileExts = ['extension', 'extensionpoint', 'edm', 'model', 'dsm', 'schema', 'bpmn', 'job', 'listener', 'websocket', 'roles', 'constraints', 'table', 'view'];
@@ -317,11 +322,18 @@ projectsView.controller('ProjectsViewController', [
             }
         }
 
-        function getChildrenNames(node) {
+        function getChildrenNames(node, type = '') {
             let root = $scope.jstreeWidget.jstree(true).get_node(node);
             let names = [];
-            for (let i = 0; i < root.children.length; i++) {
-                names.push($scope.jstreeWidget.jstree(true).get_text(root.children[i]));
+            if (type) {
+                for (let i = 0; i < root.children.length; i++) {
+                    let child = $scope.jstreeWidget.jstree(true).get_node(root.children[i]);
+                    if (child.type === type) names.push(child.text);
+                }
+            } else {
+                for (let i = 0; i < root.children.length; i++) {
+                    names.push($scope.jstreeWidget.jstree(true).get_text(root.children[i]));
+                }
             }
             return names;
         }
@@ -1063,21 +1075,24 @@ projectsView.controller('ProjectsViewController', [
                 if (response.status === 201) {
                     workspaceApi.getMetadata(response.data).then(function (metadata) {
                         if (metadata.status === 200) {
-                            $scope.jstreeWidget.jstree(true).create_node(
-                                parent,
-                                {
-                                    text: metadata.data.name,
-                                    type: 'file',
-                                    state: {
-                                        status: metadata.data.status
+                            $scope.jstreeWidget.jstree(true).deselect_all(true);
+                            $scope.jstreeWidget.jstree(true).select_node(
+                                $scope.jstreeWidget.jstree(true).create_node(
+                                    parent,
+                                    {
+                                        text: metadata.data.name,
+                                        type: 'file',
+                                        state: {
+                                            status: metadata.data.status
+                                        },
+                                        icon: getFileIcon(metadata.data.name),
+                                        data: {
+                                            path: metadata.data.path.substring($scope.selectedWorkspace.name.length + 1, metadata.data.path.length),
+                                            workspace: $scope.selectedWorkspace.name,
+                                            contentType: metadata.data.contentType,
+                                        }
                                     },
-                                    icon: getFileIcon(metadata.data.name),
-                                    data: {
-                                        path: metadata.data.path.substring($scope.selectedWorkspace.name.length + 1, metadata.data.path.length),
-                                        workspace: $scope.selectedWorkspace.name,
-                                        contentType: metadata.data.contentType,
-                                    }
-                                },
+                                )
                             );
                         } else {
                             messageHub.showAlertError('Could not create file', `There was an error while creating '${name}'`);
@@ -1092,16 +1107,19 @@ projectsView.controller('ProjectsViewController', [
         function createFolder(parent, name, workspace, path) {
             workspaceApi.createNode(name, `/${workspace}${path}`, true).then(function (response) {
                 if (response.status === 201) {
-                    $scope.jstreeWidget.jstree(true).create_node(
-                        parent,
-                        {
-                            text: name,
-                            type: "folder",
-                            data: {
-                                path: (path.endsWith('/') ? path : path + '/') + name,
-                                workspace: workspace,
-                            }
-                        },
+                    $scope.jstreeWidget.jstree(true).deselect_all(true);
+                    $scope.jstreeWidget.jstree(true).select_node(
+                        $scope.jstreeWidget.jstree(true).create_node(
+                            parent,
+                            {
+                                text: name,
+                                type: "folder",
+                                data: {
+                                    path: (path.endsWith('/') ? path : path + '/') + name,
+                                    workspace: workspace,
+                                }
+                            },
+                        )
                     );
                 }
             });
@@ -1417,6 +1435,28 @@ projectsView.controller('ProjectsViewController', [
         );
 
         messageHub.onDidReceiveMessage(
+            "projects.formDialog.create.file",
+            function (msg) {
+                if (msg.data.buttonId === "b1") {
+                    createFile($scope.newNodeData.parent, msg.data.formData[0].value, $scope.newNodeData.workspace, $scope.newNodeData.path);
+                }
+                messageHub.hideFormDialog("projectsNewFileForm");
+            },
+            true
+        );
+
+        messageHub.onDidReceiveMessage(
+            "projects.formDialog.create.folder",
+            function (msg) {
+                if (msg.data.buttonId === "b1") {
+                    createFolder($scope.newNodeData.parent, msg.data.formData[0].value, $scope.newNodeData.workspace, $scope.newNodeData.path);
+                }
+                messageHub.hideFormDialog("projectsNewFolderForm");
+            },
+            true
+        );
+
+        messageHub.onDidReceiveMessage(
             'projects.tree.contextmenu',
             function (msg) {
                 if (msg.data.itemId === 'open') {
@@ -1424,9 +1464,69 @@ projectsView.controller('ProjectsViewController', [
                 } else if (msg.data.itemId === 'openWith') {
                     openFile(msg.data.data.node, msg.data.data.editorId);
                 } else if (msg.data.itemId === 'file') {
-                    createFile(msg.data.data.parent, 'New File', msg.data.data.workspace, msg.data.data.path);
+                    $scope.newNodeData.parent = msg.data.data.parent;
+                    $scope.newNodeData.workspace = msg.data.data.workspace;
+                    $scope.newNodeData.path = msg.data.data.path;
+                    messageHub.showFormDialog(
+                        "projectsNewFileForm",
+                        "Create new file",
+                        [{
+                            id: "fdti1",
+                            type: "input",
+                            label: "Name",
+                            required: true,
+                            inputRules: {
+                                excluded: getChildrenNames(msg.data.data.parent, 'file'),
+                                patterns: ['^[^/:]*$'],
+                            },
+                            value: '',
+                        }],
+                        [{
+                            id: "b1",
+                            type: "emphasized",
+                            label: "Create",
+                            whenValid: true
+                        },
+                        {
+                            id: "b2",
+                            type: "transparent",
+                            label: "Cancel",
+                        }],
+                        "projects.formDialog.create.file",
+                        "Creating..."
+                    );
                 } else if (msg.data.itemId === 'folder') {
-                    createFolder(msg.data.data.parent, 'New Folder', msg.data.data.workspace, msg.data.data.path);
+                    $scope.newNodeData.parent = msg.data.data.parent;
+                    $scope.newNodeData.workspace = msg.data.data.workspace;
+                    $scope.newNodeData.path = msg.data.data.path;
+                    messageHub.showFormDialog(
+                        "projectsNewFolderForm",
+                        "Create new folder",
+                        [{
+                            id: "fdti1",
+                            type: "input",
+                            label: "Name",
+                            required: true,
+                            inputRules: {
+                                excluded: getChildrenNames(msg.data.data.parent, 'folder'),
+                                patterns: ['^[^/:]*$'],
+                            },
+                            value: '',
+                        }],
+                        [{
+                            id: "b1",
+                            type: "emphasized",
+                            label: "Create",
+                            whenValid: true
+                        },
+                        {
+                            id: "b2",
+                            type: "transparent",
+                            label: "Cancel",
+                        }],
+                        "projects.formDialog.create.folder",
+                        "Creating..."
+                    );
                 } else if (msg.data.itemId === 'rename') {
                     $scope.jstreeWidget.jstree(true).edit(msg.data.data);
                 } else if (msg.data.itemId === 'delete') {
@@ -1445,7 +1545,7 @@ projectsView.controller('ProjectsViewController', [
                         },
                         {
                             id: 'b3',
-                            type: 'normal',
+                            type: 'transparent',
                             label: 'Cancel',
                         }],
                     ).then(function (dialogResponse) {
