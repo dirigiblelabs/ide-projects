@@ -47,6 +47,7 @@ projectsView.controller('ProjectsViewController', [
             parent: '',
             workspace: '',
             path: '',
+            content: '',
         };
         $scope.duplicateProjectData = {};
         $scope.imageFileExts = ['ico', 'bmp', 'png', 'jpg', 'jpeg', 'gif', 'svg'];
@@ -273,15 +274,13 @@ projectsView.controller('ProjectsViewController', [
             } else delete moveObj.node.state.failedMove;
         });
 
-        function setMenuTemplateItems(parent, menuObj, workspace, nodePath, childrenIds) {
+        function setMenuTemplateItems(parent, menuObj, workspace, nodePath) {
             let priorityTemplates = true;
             let childExtensions = {};
-            for (let i = 0; i < childrenIds.length; i++) {
-                let child = $scope.jstreeWidget.jstree(true).get_node(childrenIds[i]);
-                if (child.type === 'file') {
-                    let lastIndex = child.text.lastIndexOf('.');
-                    if (lastIndex !== -1) childExtensions[child.text.substring(lastIndex + 1)] = true;
-                }
+            let children = getChildrenNames(parent, 'file');
+            for (let i = 0; i < children.length; i++) {
+                let lastIndex = children[i].lastIndexOf('.');
+                if (lastIndex !== -1) childExtensions[children[i].substring(lastIndex + 1)] = true;
             }
             for (let i = 0; i < $scope.menuTemplates.length; i++) {
                 let item = {
@@ -296,10 +295,13 @@ projectsView.controller('ProjectsViewController', [
                 if (!item.isDisabled) {
                     item.data = {
                         parent: parent,
-                        name: `New File.${$scope.menuTemplates[i].extension}`,
+                        extension: $scope.menuTemplates[i].extension,
                         path: nodePath,
                         content: $scope.menuTemplates[i].data,
                         workspace: workspace,
+                        name: $scope.menuTemplates[i].name,
+                        staticName: $scope.menuTemplates[i].staticName || false,
+                        nameless: $scope.menuTemplates[i].nameless || false,
                     };
                 }
                 if (priorityTemplates && !$scope.menuTemplates[i].hasOwnProperty('order')) {
@@ -494,7 +496,7 @@ projectsView.controller('ProjectsViewController', [
                         };
                         if ($scope.genericTemplates.length) {
                             menuObj.items.push(generateObj);
-                            setMenuTemplateItems(node.id, menuObj, node.data.workspace, node.data.path, node.children);
+                            setMenuTemplateItems(node.id, menuObj, node.data.workspace, node.data.path);
                         }
                         // menuObj.items.push(importObj);
                         menuObj.items.push(importZipObj);
@@ -523,7 +525,7 @@ projectsView.controller('ProjectsViewController', [
                                 importZipObj,
                             ]
                         };
-                        setMenuTemplateItems(node.id, menuObj, node.data.workspace, node.data.path, node.children);
+                        setMenuTemplateItems(node.id, menuObj, node.data.workspace, node.data.path);
                         return menuObj;
                     } else if (node.type === "file") {
                         let menuObj = {
@@ -1438,7 +1440,8 @@ projectsView.controller('ProjectsViewController', [
             "projects.formDialog.create.file",
             function (msg) {
                 if (msg.data.buttonId === "b1") {
-                    createFile($scope.newNodeData.parent, msg.data.formData[0].value, $scope.newNodeData.workspace, $scope.newNodeData.path);
+                    createFile($scope.newNodeData.parent, msg.data.formData[0].value, $scope.newNodeData.workspace, $scope.newNodeData.path, $scope.newNodeData.content);
+                    $scope.newNodeData.content = '';
                 }
                 messageHub.hideFormDialog("projectsNewFileForm");
             },
@@ -1467,9 +1470,10 @@ projectsView.controller('ProjectsViewController', [
                     $scope.newNodeData.parent = msg.data.data.parent;
                     $scope.newNodeData.workspace = msg.data.data.workspace;
                     $scope.newNodeData.path = msg.data.data.path;
+                    $scope.newNodeData.content = '';
                     messageHub.showFormDialog(
                         "projectsNewFileForm",
-                        "Create new file",
+                        "Create a new file",
                         [{
                             id: "fdti1",
                             type: "input",
@@ -1753,13 +1757,72 @@ projectsView.controller('ProjectsViewController', [
                         );
                     }
                 } else {
-                    createFile(
-                        msg.data.data.parent,
-                        msg.data.data.name,
-                        msg.data.data.workspace,
-                        msg.data.data.path,
-                        msg.data.data.content
-                    );
+                    if (msg.data.data.nameless) {
+                        createFile(
+                            msg.data.data.parent,
+                            `.${msg.data.data.extension}`,
+                            msg.data.data.workspace,
+                            msg.data.data.path,
+                            msg.data.data.content
+                        );
+                    } else {
+                        let name;
+                        let excludedNames = getChildrenNames(msg.data.data.parent, 'file');
+                        let i = 1;
+                        if (msg.data.data.extension) {
+                            name = `${msg.data.data.name}.${msg.data.data.extension}`;
+                            while (excludedNames.includes(name)) {
+                                name = `${msg.data.data.name} ${i++}.${msg.data.data.extension}`;
+                            }
+                        } else {
+                            name = msg.data.data.name;
+                            while (excludedNames.includes(name)) {
+                                name = `${msg.data.data.name} ${i++}`;
+                            }
+                        }
+                        if (msg.data.data.staticName) {
+                            createFile(
+                                msg.data.data.parent,
+                                name,
+                                msg.data.data.workspace,
+                                msg.data.data.path,
+                                msg.data.data.content
+                            );
+                        } else {
+                            $scope.newNodeData.parent = msg.data.data.parent;
+                            $scope.newNodeData.workspace = msg.data.data.workspace;
+                            $scope.newNodeData.path = msg.data.data.path;
+                            $scope.newNodeData.content = msg.data.data.content;
+                            messageHub.showFormDialog(
+                                "projectsNewFileForm",
+                                "Create a new file",
+                                [{
+                                    id: "fdti1",
+                                    type: "input",
+                                    label: "Name",
+                                    required: true,
+                                    inputRules: {
+                                        excluded: excludedNames,
+                                        patterns: ['^[^/:]*$'],
+                                    },
+                                    value: name,
+                                }],
+                                [{
+                                    id: "b1",
+                                    type: "emphasized",
+                                    label: "Create",
+                                    whenValid: true
+                                },
+                                {
+                                    id: "b2",
+                                    type: "transparent",
+                                    label: "Cancel",
+                                }],
+                                "projects.formDialog.create.file",
+                                "Creating..."
+                            );
+                        }
+                    }
                 }
             },
             true
